@@ -104,14 +104,14 @@ To run this project locally, follow these steps:
     - To make the monitoring faster, you can decrease the delay time. For example, change it to time.sleep(10) for 10-second intervals.
    ##Important Note: Reducing the delay may lead to issues with GPT-3.5 analysis generation, as the model might not have enough time to fully process and return a response before the next update. It is recommended to keep a delay of at least 10 seconds to ensure stable performance.
 
-##File Structure
+## File Structure
  - pipeline_monitor.py: Main script for running the real-time monitoring system.
  - .env: Environment file (not pushed to GitHub, used to store API keys).
  - requirements.txt: List of dependencies required to run the project.
  
-**LICENSE: MIT License file.
+** LICENSE: MIT License file.
 
-##Contribution
+## Contribution
   - Contributions are welcome! Feel free to fork this repository, submit issues, or open pull requests to enhance the project. Whether it's improving the codebase, adding new features, or enhancing documentation, your contributions are highly appreciated.
 
 ##License
