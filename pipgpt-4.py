@@ -3,7 +3,7 @@ import openai
 import os
 from dotenv import load_dotenv
 import streamlit as st
-import matplotlib.pyplot as plt  # For plotting the live graph
+import matplotlib.pyplot as plt
 import time
 
 # Load environment variables from .env
@@ -30,7 +30,7 @@ def analyze_pipeline(vibration, temp, pressure, safe_range_vibration, safe_range
             {"role": "system", "content": "You are a pipeline monitoring assistant."},
             {"role": "user", "content": prompt}
         ],
-        max_tokens=150  # Limit the response length to ensure brevity
+        max_tokens=250  # Increased token limit to prevent cutting off the response
     )
 
     # Extract the GPT response
@@ -38,29 +38,13 @@ def analyze_pipeline(vibration, temp, pressure, safe_range_vibration, safe_range
 
 # Function to calculate carbon footprint based on energy consumed
 def calculate_carbon_footprint(energy_consumed_kWh, carbon_intensity=0.233):
-    """
-    Calculate carbon emissions based on energy consumed (in kWh).
-    Default carbon intensity is 0.233 kgCO2 per kWh (global average for electricity).
-    
-    :param energy_consumed_kWh: float, Energy consumed in kilowatt-hours (kWh).
-    :param carbon_intensity: float, Carbon intensity in kgCO2/kWh.
-    :return: float, Total carbon emissions in kilograms of CO2.
-    """
     return energy_consumed_kWh * carbon_intensity
 
 # Function to simulate renewable energy offset (solar + wind)
 def simulate_renewable_energy_offset(total_energy_consumed_kWh, solar_power_generation_kWh, wind_power_generation_kWh):
-    """
-    Simulate how much renewable energy (solar + wind) can offset the total energy consumption.
-    
-    :param total_energy_consumed_kWh: float, Total energy consumed by the pipeline in kWh.
-    :param solar_power_generation_kWh: float, Energy generated from solar panels in kWh.
-    :param wind_power_generation_kWh: float, Energy generated from wind turbines in kWh.
-    :return: float, Remaining energy needed from non-renewable sources in kWh.
-    """
     renewable_energy_generated = solar_power_generation_kWh + wind_power_generation_kWh
     remaining_energy = total_energy_consumed_kWh - renewable_energy_generated
-    return max(remaining_energy, 0)  # Ensure we don't go below zero (if renewables fully offset the energy)
+    return max(remaining_energy, 0)
 
 # Simulate sensor data (pressure, vibration, temperature)
 def simulate_sensor_data():
@@ -98,9 +82,11 @@ if 'energy_history' not in st.session_state:
     st.session_state.energy_history = []
 if 'renewable_energy_history' not in st.session_state:
     st.session_state.renewable_energy_history = []
+if 'carbon_footprint_history' not in st.session_state:
+    st.session_state.carbon_footprint_history = []
 
 # Create a row for the Start/Stop buttons
-col_start, col_stop = st.columns([1, 1])  # Create two equal-sized columns for buttons
+col_start, col_stop = st.columns([1, 1])
 
 # Place the buttons side by side
 with col_start:
@@ -120,11 +106,11 @@ col1, col2 = st.columns([2, 1])  # Set up two columns: larger left column and sm
 
 # Create placeholders for the graph and metrics
 graph_placeholder = col1.empty()    # For the live updating graph
-renewable_placeholder = col1.empty()  # For renewable energy comparison graph
-gpt_placeholder = st.empty()        # For the GPT analysis
+gpt_placeholder = col1.empty()      # For the GPT analysis below the graph
 pressure_placeholder = col2.empty()
 vibration_placeholder = col2.empty()
 temperature_placeholder = col2.empty()
+emission_placeholder = col1.empty()  # Placeholder for live emissions report below the graph
 
 # Monitoring loop
 while st.session_state.monitoring:
@@ -145,29 +131,25 @@ while st.session_state.monitoring:
     st.session_state.temperature_history.append(temperature)
     st.session_state.energy_history.append(energy_used_kWh)
     st.session_state.renewable_energy_history.append(remaining_energy_needed)
+    st.session_state.carbon_footprint_history.append(carbon_footprint_kg)
 
-    # Determine if the values are normal or abnormal and color them accordingly
-    vib_status, vib_color = determine_status(vibration, *safe_range_vibration)
-    temp_status, temp_color = determine_status(temperature, *safe_range_temp)
-    pressure_status, pressure_color = determine_status(pressure, *safe_range_pressure)
-
-    # Replace old metrics with new values in the placeholders (now in the right column)
+    # Align metrics and determine if the values are normal or abnormal and color them accordingly
     pressure_placeholder.markdown(
-        f"<h4 style='color:{pressure_color}; font-size:18px;'>Pressure (psi): {pressure:.2f} ({pressure_status})</h4>",
+        f"<h4 style='color:{determine_status(pressure, *safe_range_pressure)[1]}; font-size:18px;'>Pressure (psi): {pressure:.2f}</h4>",
         unsafe_allow_html=True
     )
-
     vibration_placeholder.markdown(
-        f"<h4 style='color:{vib_color}; font-size:18px;'>Vibration Level: {vibration:.2f} ({vib_status})</h4>",
+        f"<h4 style='color:{determine_status(vibration, *safe_range_vibration)[1]}; font-size:18px;'>Vibration Level: {vibration:.2f}</h4>",
         unsafe_allow_html=True
     )
     temperature_placeholder.markdown(
-        f"<h4 style='color:{temp_color}; font-size:18px;'>Temperature: {temperature:.2f}°C ({temp_status})</h4>",
-)
-    
+        f"<h4 style='color:{determine_status(temperature, *safe_range_temp)[1]}; font-size:18px;'>Temperature: {temperature:.2f}°C</h4>",
+        unsafe_allow_html=True
+    )
+
     # Update the live graph
     with graph_placeholder:
-        fig, ax1 = plt.subplots(figsize=(12, 6))  # Increased the graph size to make it more visible
+        fig, ax1 = plt.subplots(figsize=(14, 7))  # Make the graph larger to fit everything
 
         # Plot pressure on primary y-axis
         ax1.plot(st.session_state.pressure_history, label='Pressure (psi)', color='blue')
@@ -187,35 +169,17 @@ while st.session_state.monitoring:
         # Plot normal ranges as dashed lines
         ax1.axhline(y=safe_range_pressure[1], color='blue', linestyle='--', label='Safe Max Pressure')
         ax2.axhline(y=safe_range_vibration[1], color='green', linestyle='--', label='Safe Max Vibration')
-        ax2.axhline(y=safe_range_temp[1] - 15, color='red', linestyle='--', label='Safe Max Temperature')
+        ax2.axhline(y=safe_range_temp[1], color='red', linestyle='--', label='Safe Max Temperature')
 
-        # Combine legends from both axes and move to upper right outside the graph, slightly to the right
+        # Combine legends and move to upper right outside the graph
         lines_1, labels_1 = ax1.get_legend_handles_labels()
         lines_2, labels_2 = ax2.get_legend_handles_labels()
         ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right', bbox_to_anchor=(1.35, 1))
 
-        # Set title
         plt.title('Live Trendline of Pressure, Vibration, and Temperature')
 
         # Display the live-updating graph
         graph_placeholder.pyplot(fig)
-        plt.close(fig)
-
-    # Update the renewable energy comparison graph
-    with renewable_placeholder:
-        fig, ax3 = plt.subplots(figsize=(12, 6))  # Graph for energy consumption vs renewable energy
-
-        # Plot total energy consumption vs renewable offset
-        ax3.plot(st.session_state.energy_history, label='Total Energy Used (kWh)', color='orange')
-        ax3.plot(st.session_state.renewable_energy_history, label='Remaining Energy After Renewable Offset (kWh)', color='purple')
-
-        ax3.set_xlabel('Time (steps)')
-        ax3.set_ylabel('Energy (kWh)')
-        ax3.set_title('Energy Consumption vs Renewable Offset')
-
-        # Display the renewable energy comparison graph
-        ax3.legend(loc='upper right')
-        renewable_placeholder.pyplot(fig)
         plt.close(fig)
 
     # Generate GPT-3.5 Analysis dynamically
@@ -230,57 +194,81 @@ while st.session_state.monitoring:
         unsafe_allow_html=True
     )
 
-    # Add a 4-second delay before simulating new data
-    time.sleep(4)
+    # Display live emission report, updated as energy consumption and renewable energy change
+    emission_placeholder.markdown(
+        f"<div style='text-align: justify; font-size:12px;'>"
+        f"<h5>Total Energy Consumed: {sum(st.session_state.energy_history):.2f} kWh</h5>"
+        f"<h5>Renewable Energy Offset: {sum(st.session_state.renewable_energy_history):.2f} kWh</h5>"
+        f"<h5>Carbon Footprint: {sum(st.session_state.carbon_footprint_history):.2f} kg CO2</h5>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
 
-# After stop, display the final graph
-with graph_placeholder:
-    fig, ax1 = plt.subplots(figsize=(12, 6))
+    # Add a 15-second delay to allow ChatGPT enough time to print the full analysis
+    time.sleep(15)
 
-    # Plot pressure on primary y-axis
-    ax1.plot(st.session_state.pressure_history, label='Pressure (psi)', color='blue')
-    ax1.set_xlabel('Time (steps)')
-    ax1.set_ylabel('Pressure (psi)', color='blue')
-    ax1.tick_params(axis='y', labelcolor='blue')
+# After stop, display two final graphs: one for pressure, temperature, and vibration; another for renewable energy offset
+if not st.session_state.monitoring:
+    # First graph: Pressure, Vibration, Temperature trends
+    with graph_placeholder:
+        fig, ax1 = plt.subplots(figsize=(14, 7))  # Larger graph for better visualization
 
-    # Create secondary y-axis for temperature and vibration
-    ax2 = ax1.twinx()
+        # Plot pressure on primary y-axis
+        ax1.plot(st.session_state.pressure_history, label='Pressure (psi)', color='blue')
+        ax1.set_xlabel('Time (steps)')
+        ax1.set_ylabel('Pressure (psi)', color='blue')
+        ax1.tick_params(axis='y', labelcolor='blue')
 
-    # Plot temperature and vibration on secondary y-axis
-    ax2.plot(st.session_state.temperature_history, label='Temperature (°C)', color='red')
-    ax2.plot(st.session_state.vibration_history, label='Vibration', color='green')
-    ax2.set_ylabel('Temperature (°C) / Vibration', color='black')
-    ax2.tick_params(axis='y', labelcolor='black')
+        # Create secondary y-axis for temperature and vibration
+        ax2 = ax1.twinx()
 
-    # Plot normal ranges as dashed lines
-    ax1.axhline(y=safe_range_pressure[1], color='blue', linestyle='--', label='Safe Max Pressure')
-    ax2.axhline(y=safe_range_vibration[1], color='green', linestyle='--', label='Safe Max Vibration')
-    ax2.axhline(y=safe_range_temp[1] - 15, color='red', linestyle='--', label='Safe Max Temperature')
+        # Plot temperature and vibration on secondary y-axis
+        ax2.plot(st.session_state.temperature_history, label='Temperature (°C)', color='red')
+        ax2.plot(st.session_state.vibration_history, label='Vibration', color='green')
+        ax2.set_ylabel('Temperature (°C) / Vibration', color='black')
+        ax2.tick_params(axis='y', labelcolor='black')
 
-    # Combine legends and move to upper right outside the graph
-    lines_1, labels_1 = ax1.get_legend_handles_labels()
-    lines_2, labels_2 = ax2.get_legend_handles_labels()
-    ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right', bbox_to_anchor=(1.35, 1))
+        # Plot normal ranges as dashed lines
+        ax1.axhline(y=safe_range_pressure[1], color='blue', linestyle='--', label='Safe Max Pressure')
+        ax2.axhline(y=safe_range_vibration[1], color='green', linestyle='--', label='Safe Max Vibration')
+        ax2.axhline(y=safe_range_temp[1], color='red', linestyle='--', label='Safe Max Temperature')
 
-    plt.title('Final Trendline of Pressure, Vibration, and Temperature')
+        # Combine legends and move to upper right outside the graph
+        lines_1, labels_1 = ax1.get_legend_handles_labels()
+        lines_2, labels_2 = ax2.get_legend_handles_labels()
+        ax1.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right', bbox_to_anchor=(1.35, 1))
 
-    # Display the final graph
-    graph_placeholder.pyplot(fig)
-    plt.close(fig)
+        plt.title('Final Trendline of Pressure, Vibration, and Temperature')
 
-# After stop, display the final renewable energy comparison graph
-with renewable_placeholder:
-    fig, ax3 = plt.subplots(figsize=(12, 6))  # Graph for energy consumption vs renewable energy
+        # Display the final graph
+        graph_placeholder.pyplot(fig)
+        plt.close(fig)
 
-    # Plot total energy consumption vs renewable offset
-    ax3.plot(st.session_state.energy_history, label='Total Energy Used (kWh)', color='orange')
-    ax3.plot(st.session_state.renewable_energy_history, label='Remaining Energy After Renewable Offset (kWh)', color='purple')
+    # Second graph: Renewable Energy Offset comparison
+    with col1:
+        fig, ax3 = plt.subplots(figsize=(14, 7))  # Larger graph for energy consumption vs renewable energy
 
-    ax3.set_xlabel('Time (steps)')
-    ax3.set_ylabel('Energy (kWh)')
-    ax3.set_title('Final Energy Consumption vs Renewable Offset')
+        # Plot total energy consumption vs renewable offset
+        ax3.plot(st.session_state.energy_history, label='Total Energy Used (kWh)', color='orange')
+        ax3.plot(st.session_state.renewable_energy_history, label='Remaining Energy After Renewable Offset (kWh)', color='purple')
 
-    # Display the renewable energy comparison graph
-    ax3.legend(loc='upper right')
-    renewable_placeholder.pyplot(fig)
-    plt.close(fig)
+        ax3.set_xlabel('Time (steps)')
+        ax3.set_ylabel('Energy (kWh)')
+        ax3.set_title('Final Energy Consumption vs Renewable Offset')
+
+        # Display the renewable energy comparison graph
+        ax3.legend(loc='upper right')
+        st.pyplot(fig)
+        plt.close(fig)
+
+# Final emission report displayed at the end
+if not st.session_state.monitoring:
+    total_carbon_emissions = sum(st.session_state.carbon_footprint_history)
+    emission_placeholder.markdown(
+        f"<div style='text-align: justify; font-size:12px;'>"
+        f"<h5>Total Energy Consumed: {sum(st.session_state.energy_history):.2f} kWh</h5>"
+        f"<h5>Renewable Energy Offset: {sum(st.session_state.renewable_energy_history):.2f} kWh</h5>"
+        f"<h5>Total Carbon Footprint: {total_carbon_emissions:.2f} kg CO2</h5>"
+        f"</div>",
+        unsafe_allow_html=True
+    )
