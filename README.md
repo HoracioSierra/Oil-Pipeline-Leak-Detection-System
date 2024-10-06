@@ -109,7 +109,7 @@ To run this project locally, follow these steps:
  - .env: Environment file (not pushed to GitHub, used to store API keys).
  - requirements.txt: List of dependencies required to run the project.
  
-** LICENSE: MIT License file.
+**LICENSE**: MIT License file.
 
 ## Contribution
   - Contributions are welcome! Feel free to fork this repository, submit issues, or open pull requests to enhance the project. Whether it's improving the codebase, adding new features, or enhancing documentation, your contributions are highly appreciated.
