@@ -36,12 +36,39 @@ def analyze_pipeline(vibration, temp, pressure, safe_range_vibration, safe_range
     # Extract the GPT response
     return response['choices'][0]['message']['content'].strip()
 
+# Function to calculate carbon footprint based on energy consumed
+def calculate_carbon_footprint(energy_consumed_kWh, carbon_intensity=0.233):
+    """
+    Calculate carbon emissions based on energy consumed (in kWh).
+    Default carbon intensity is 0.233 kgCO2 per kWh (global average for electricity).
+    
+    :param energy_consumed_kWh: float, Energy consumed in kilowatt-hours (kWh).
+    :param carbon_intensity: float, Carbon intensity in kgCO2/kWh.
+    :return: float, Total carbon emissions in kilograms of CO2.
+    """
+    return energy_consumed_kWh * carbon_intensity
+
+# Function to simulate renewable energy offset (solar + wind)
+def simulate_renewable_energy_offset(total_energy_consumed_kWh, solar_power_generation_kWh, wind_power_generation_kWh):
+    """
+    Simulate how much renewable energy (solar + wind) can offset the total energy consumption.
+    
+    :param total_energy_consumed_kWh: float, Total energy consumed by the pipeline in kWh.
+    :param solar_power_generation_kWh: float, Energy generated from solar panels in kWh.
+    :param wind_power_generation_kWh: float, Energy generated from wind turbines in kWh.
+    :return: float, Remaining energy needed from non-renewable sources in kWh.
+    """
+    renewable_energy_generated = solar_power_generation_kWh + wind_power_generation_kWh
+    remaining_energy = total_energy_consumed_kWh - renewable_energy_generated
+    return max(remaining_energy, 0)  # Ensure we don't go below zero (if renewables fully offset the energy)
+
 # Simulate sensor data (pressure, vibration, temperature)
 def simulate_sensor_data():
     pressure = random.uniform(600, 2000)  # Simulate pressure in psi for oil pipeline
     vibration = random.uniform(0, 10)     # Simulate vibration levels
     temperature = random.uniform(-10, 50)  # Simulate temperature in Celsius
-    return pressure, vibration, temperature
+    energy_used_kWh = random.uniform(50, 150)  # Simulate energy consumption in kWh for pumps
+    return pressure, vibration, temperature, energy_used_kWh
 
 # Streamlit app interface
 st.title("Pipeline Integrity Monitoring System with GPT-3.5")
@@ -67,6 +94,10 @@ if 'vibration_history' not in st.session_state:
     st.session_state.vibration_history = []
 if 'temperature_history' not in st.session_state:
     st.session_state.temperature_history = []
+if 'energy_history' not in st.session_state:
+    st.session_state.energy_history = []
+if 'renewable_energy_history' not in st.session_state:
+    st.session_state.renewable_energy_history = []
 
 # Create a row for the Start/Stop buttons
 col_start, col_stop = st.columns([1, 1])  # Create two equal-sized columns for buttons
@@ -89,6 +120,7 @@ col1, col2 = st.columns([2, 1])  # Set up two columns: larger left column and sm
 
 # Create placeholders for the graph and metrics
 graph_placeholder = col1.empty()    # For the live updating graph
+renewable_placeholder = col1.empty()  # For renewable energy comparison graph
 gpt_placeholder = st.empty()        # For the GPT analysis
 pressure_placeholder = col2.empty()
 vibration_placeholder = col2.empty()
@@ -97,12 +129,22 @@ temperature_placeholder = col2.empty()
 # Monitoring loop
 while st.session_state.monitoring:
     # Simulate sensor data
-    pressure, vibration, temperature = simulate_sensor_data()
+    pressure, vibration, temperature, energy_used_kWh = simulate_sensor_data()
+
+    # Simulate renewable energy generation (solar + wind)
+    solar_generation_kWh = random.uniform(10, 50)  # Simulate solar energy generation in kWh
+    wind_generation_kWh = random.uniform(10, 50)   # Simulate wind energy generation in kWh
+    remaining_energy_needed = simulate_renewable_energy_offset(energy_used_kWh, solar_generation_kWh, wind_generation_kWh)
+
+    # Calculate the carbon footprint
+    carbon_footprint_kg = calculate_carbon_footprint(remaining_energy_needed)
 
     # Append new data to history
     st.session_state.pressure_history.append(pressure)
     st.session_state.vibration_history.append(vibration)
     st.session_state.temperature_history.append(temperature)
+    st.session_state.energy_history.append(energy_used_kWh)
+    st.session_state.renewable_energy_history.append(remaining_energy_needed)
 
     # Determine if the values are normal or abnormal and color them accordingly
     vib_status, vib_color = determine_status(vibration, *safe_range_vibration)
@@ -121,9 +163,8 @@ while st.session_state.monitoring:
     )
     temperature_placeholder.markdown(
         f"<h4 style='color:{temp_color}; font-size:18px;'>Temperature: {temperature:.2f}°C ({temp_status})</h4>",
-        unsafe_allow_html=True
-    )
-
+)
+    
     # Update the live graph
     with graph_placeholder:
         fig, ax1 = plt.subplots(figsize=(12, 6))  # Increased the graph size to make it more visible
@@ -146,7 +187,7 @@ while st.session_state.monitoring:
         # Plot normal ranges as dashed lines
         ax1.axhline(y=safe_range_pressure[1], color='blue', linestyle='--', label='Safe Max Pressure')
         ax2.axhline(y=safe_range_vibration[1], color='green', linestyle='--', label='Safe Max Vibration')
-        ax2.axhline(y=safe_range_temp[1] - 15, color='red', linestyle='--', label='Safe Max Temperature')  # Lowered the max temp line by 15 units
+        ax2.axhline(y=safe_range_temp[1] - 15, color='red', linestyle='--', label='Safe Max Temperature')
 
         # Combine legends from both axes and move to upper right outside the graph, slightly to the right
         lines_1, labels_1 = ax1.get_legend_handles_labels()
@@ -158,7 +199,24 @@ while st.session_state.monitoring:
 
         # Display the live-updating graph
         graph_placeholder.pyplot(fig)
-        plt.close(fig)  # Close the figure to free memory
+        plt.close(fig)
+
+    # Update the renewable energy comparison graph
+    with renewable_placeholder:
+        fig, ax3 = plt.subplots(figsize=(12, 6))  # Graph for energy consumption vs renewable energy
+
+        # Plot total energy consumption vs renewable offset
+        ax3.plot(st.session_state.energy_history, label='Total Energy Used (kWh)', color='orange')
+        ax3.plot(st.session_state.renewable_energy_history, label='Remaining Energy After Renewable Offset (kWh)', color='purple')
+
+        ax3.set_xlabel('Time (steps)')
+        ax3.set_ylabel('Energy (kWh)')
+        ax3.set_title('Energy Consumption vs Renewable Offset')
+
+        # Display the renewable energy comparison graph
+        ax3.legend(loc='upper right')
+        renewable_placeholder.pyplot(fig)
+        plt.close(fig)
 
     # Generate GPT-3.5 Analysis dynamically
     gpt_response = analyze_pipeline(vibration, temperature, pressure, safe_range_vibration, safe_range_temp, safe_range_pressure)
@@ -208,4 +266,21 @@ with graph_placeholder:
 
     # Display the final graph
     graph_placeholder.pyplot(fig)
+    plt.close(fig)
+
+# After stop, display the final renewable energy comparison graph
+with renewable_placeholder:
+    fig, ax3 = plt.subplots(figsize=(12, 6))  # Graph for energy consumption vs renewable energy
+
+    # Plot total energy consumption vs renewable offset
+    ax3.plot(st.session_state.energy_history, label='Total Energy Used (kWh)', color='orange')
+    ax3.plot(st.session_state.renewable_energy_history, label='Remaining Energy After Renewable Offset (kWh)', color='purple')
+
+    ax3.set_xlabel('Time (steps)')
+    ax3.set_ylabel('Energy (kWh)')
+    ax3.set_title('Final Energy Consumption vs Renewable Offset')
+
+    # Display the renewable energy comparison graph
+    ax3.legend(loc='upper right')
+    renewable_placeholder.pyplot(fig)
     plt.close(fig)

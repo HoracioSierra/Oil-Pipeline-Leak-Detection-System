@@ -6,3 +6,15 @@ secret.py
 __pycache__/
 *.py[cod]
 *.pyo
+
+# Ignore specific files
+replace.txt
+pipeline-gpt.py
+pipeline-gpt1.py
+pipeline-gpt4.py
+pipeline-gpt5.py
+pipeline_monitor.py
+pipgpt-3.py
+
+pipgpt1.py
+pipgpt2.py
