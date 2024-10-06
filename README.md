@@ -114,5 +114,5 @@ To run this project locally, follow these steps:
 ## Contribution
   - Contributions are welcome! Feel free to fork this repository, submit issues, or open pull requests to enhance the project. Whether it's improving the codebase, adding new features, or enhancing documentation, your contributions are highly appreciated.
 
-##License
+## License
   - This project is licensed under the MIT License. See the LICENSE file for details.
